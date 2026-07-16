@@ -6,9 +6,8 @@
 # ==============================================================================
 
 run() {
-    local os arch
+    local os
     os="$(detect_os)"
-    arch="$(uname -m)"
 
     # Available Nerd Fonts to choose from
     local fonts=(

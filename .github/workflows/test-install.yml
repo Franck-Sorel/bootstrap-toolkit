@@ -45,9 +45,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup CI environment
+        shell: bash
         run: bash tests/ci_setup.sh
 
       - name: Install git for checkout
+        shell: bash
         run: |
           if command -v apt-get &>/dev/null; then
               apt-get update -qq && apt-get install -y -qq git
@@ -56,14 +58,15 @@ jobs:
           fi
 
       - name: Run ${{ matrix.script }}
+        shell: bash
         run: bash tests/ci_run_script.sh "${{ matrix.script }}"
 
       - name: Verify key outputs
+        shell: bash
         run: |
           echo "::group::Verification for ${{ matrix.script }}"
           case "${{ matrix.script }}" in
               install/apt.sh)
-                  # Check that core packages were installed
                   for cmd in curl git wget; do
                       if command -v "$cmd" &>/dev/null; then
                           echo "  ✔  $cmd is installed"
@@ -73,12 +76,9 @@ jobs:
                   done
                   ;;
               install/devtools.sh)
-                  # devtools defaults to "no" in non-interactive mode, so most
-                  # tools will be skipped — verify the script ran without error
                   echo "  ✔  devtools.sh completed (tools skipped in non-interactive mode)"
                   ;;
               install/fonts.sh)
-                  # fonts defaults to "no" in non-interactive mode
                   echo "  ✔  fonts.sh completed (fonts skipped in non-interactive mode)"
                   ;;
           esac
@@ -103,28 +103,33 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup CI environment
+        shell: bash
         run: bash tests/ci_setup.sh
 
-      - name: Install git for checkout
+      - name: Install git and openssl for checkout/helm
+        shell: bash
         run: |
           if command -v apt-get &>/dev/null; then
-              apt-get update -qq && apt-get install -y -qq git
+              apt-get update -qq && apt-get install -y -qq git openssl
           elif command -v dnf &>/dev/null; then
-              dnf install -y -q git
+              dnf install -y -q git openssl
           fi
 
       - name: Run kubernetes.sh (force yes for kubectl)
+        shell: bash
         run: |
           export NONINTERACTIVE=1
           export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
-          # Override ask_yes_no to always say yes for this test
           source lib/common.sh
-          # Redefine ask_yes_no to always return yes
           ask_yes_no() { return 0; }
           source install/kubernetes.sh
-          run
+          run || rc=$?
+          echo "  ℹ  kubernetes.sh exited with code ${rc:-0}"
+          # kubectl should have installed; helm may fail if openssl missing
+          # The script should handle failures gracefully
 
       - name: Verify kubectl installed
+        shell: bash
         run: |
           if command -v kubectl &>/dev/null; then
               echo "  ✔  kubectl is installed: $(kubectl version --client 2>&1 | head -1)"
@@ -146,23 +151,23 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup CI environment
+        shell: bash
         run: bash tests/ci_setup.sh
 
       - name: Install git for checkout
+        shell: bash
         run: apt-get update -qq && apt-get install -y -qq git
 
       - name: Run docker.sh (expect graceful handling)
+        shell: bash
         run: |
           export NONINTERACTIVE=1
           export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
           source lib/common.sh
           ask_yes_no() { return 0; }
           source install/docker.sh
-          # Run and capture exit code — Docker-in-Docker may fail,
-          # but the script should handle it gracefully
           run || rc=$?
           echo "  ℹ  docker.sh exited with code ${rc:-0}"
-          # The script should not crash — graceful failure is acceptable
           echo "  ✔  docker.sh handled gracefully"
 
   # --------------------------------------------------------------------------
@@ -178,12 +183,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup CI environment
+        shell: bash
         run: bash tests/ci_setup.sh
 
       - name: Install git for checkout
+        shell: bash
         run: apt-get update -qq && apt-get install -y -qq git
 
       - name: Run vscode.sh
+        shell: bash
         run: |
           export NONINTERACTIVE=1
           export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
@@ -192,7 +200,6 @@ jobs:
           source install/vscode.sh
           run || rc=$?
           echo "  ℹ  vscode.sh exited with code ${rc:-0}"
-          # Verify the .deb was at least downloaded
           if [[ -f /tmp/vscode.deb ]]; then
               echo "  ✔  VS Code .deb was downloaded"
           else

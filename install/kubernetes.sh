@@ -88,9 +88,13 @@ run() {
                 run_step "Cloning kubectx" \
                     git clone https://github.com/ahmetb/kubectx /tmp/kubectx 2>/dev/null || { ((failed++)); }
                 if [[ -d /tmp/kubectx ]]; then
-                    run_step "Installing kubectx" \
-                        sudo ln -sf /tmp/kubectx/kubectx /usr/local/bin/kubectx && \
-                        sudo ln -sf /tmp/kubectx/kubens /usr/local/bin/kubens || { ((failed++)); }
+                    if sudo ln -sf /tmp/kubectx/kubectx /usr/local/bin/kubectx && \
+                       sudo ln -sf /tmp/kubectx/kubens /usr/local/bin/kubens; then
+                        log_success "Installing kubectx — done"
+                    else
+                        log_error "Installing kubectx — failed"
+                        ((failed++))
+                    fi
                 fi
             fi
         fi

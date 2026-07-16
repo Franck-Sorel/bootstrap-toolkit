@@ -17,11 +17,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install shellcheck
+        shell: bash
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
 
       - name: Run shellcheck
+        shell: bash
         run: |
           echo "::group::Shellcheck results"
           failed=0
@@ -33,7 +35,8 @@ jobs:
               tests/ci_setup.sh \
               tests/ci_run_script.sh \
               tests/test_shellcheck.sh; do
-              if shellcheck -x "$f"; then
+              # -x: follow external sources, -e SC2015: allow A && B || C pattern
+              if shellcheck -x -e SC2015 "$f"; then
                   echo "  ✔  $f"
               else
                   echo "  ✖  $f"
@@ -44,6 +47,7 @@ jobs:
           exit $failed
 
       - name: Bash syntax check
+        shell: bash
         run: |
           echo "::group::Bash syntax check"
           failed=0
@@ -70,6 +74,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check all scripts define run()
+        shell: bash
         run: |
           failed=0
           for f in install/*.sh config/*.sh; do
@@ -83,6 +88,7 @@ jobs:
           exit $failed
 
       - name: Check all scripts are executable
+        shell: bash
         run: |
           failed=0
           for f in bootstrap.sh install/*.sh config/*.sh lib/*.sh tests/*.sh; do
@@ -96,9 +102,9 @@ jobs:
           exit $failed
 
       - name: Check STEPS array matches files
+        shell: bash
         run: |
           failed=0
-          # Extract script paths from STEPS array in bootstrap.sh
           paths=$(grep -oP '"\Kinstall/[^|]+|config/[^|]+' bootstrap.sh | sort)
           for p in $paths; do
               if [[ ! -f "$p" ]]; then

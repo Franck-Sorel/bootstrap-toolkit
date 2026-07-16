@@ -6,9 +6,8 @@
 # ==============================================================================
 
 run() {
-    local pm os
+    local pm
     pm="$(detect_package_manager)"
-    os="$(detect_os)"
 
     local failed=0
 

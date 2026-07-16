@@ -63,11 +63,13 @@ run() {
                 log_info "Extension already installed: $ext"
                 continue
             fi
-            run_step "Installing extension: $ext" \
-                code --install-extension "$ext" 2>/dev/null && ((installed++)) || {
+            if code --install-extension "$ext" 2>/dev/null; then
+                log_success "Installing extension: $ext — done"
+                ((installed++))
+            else
                 log_warn "Could not install: $ext"
                 ((failed++))
-            }
+            fi
         done
         log_info "Extensions: $installed installed, $failed failed"
     fi

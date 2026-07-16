@@ -15,7 +15,7 @@ run() {
         run_step "Creating ~/.ssh directory" \
             mkdir -p "$ssh_dir" && chmod 700 "$ssh_dir"
     else
-        log_info "~/.ssh already exists"
+        log_info "$HOME/.ssh already exists"
     fi
 
     # Check for existing keys
@@ -44,7 +44,8 @@ run() {
     read -r key_type </dev/tty 2>/dev/null || key_type=""
     key_type="${key_type:-ed25519}"
 
-    local default_comment="${USER}@$(hostname 2>/dev/null || echo localhost)"
+    local default_comment
+    default_comment="${USER}@$(hostname 2>/dev/null || echo localhost)"
     printf "  Comment (default: %s): " "$default_comment"
     read -r key_comment </dev/tty 2>/dev/null || key_comment=""
     key_comment="${key_comment:-$default_comment}"
@@ -83,9 +84,9 @@ run() {
     echo ""
     log_info "Your public key:"
     echo "  ┌──────────────────────────────────────────────────────"
-    cat "${key_path}.pub" 2>/dev/null | while IFS= read -r line; do
+    while IFS= read -r line; do
         printf "  │ %s\n" "$line"
-    done
+    done < "${key_path}.pub"
     echo "  └──────────────────────────────────────────────────────"
     log_info "Add this key to GitHub/GitLab: Settings → SSH Keys"
 

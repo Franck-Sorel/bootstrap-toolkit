@@ -31,11 +31,11 @@ fi
 # Install basic dependencies needed by the bootstrap scripts
 if command -v apt-get &>/dev/null; then
     apt-get update -qq
-    apt-get install -y -qq curl git bash ca-certificates unzip wget 2>/dev/null || true
+    apt-get install -y -qq curl git bash ca-certificates unzip wget openssl 2>/dev/null || true
 elif command -v dnf &>/dev/null; then
-    dnf install -y -q curl git bash ca-certificates unzip wget 2>/dev/null || true
+    dnf install -y -q curl git bash ca-certificates unzip wget openssl 2>/dev/null || true
 elif command -v pacman &>/dev/null; then
-    pacman -Sy --noconfirm curl git bash ca-certificates unzip wget 2>/dev/null || true
+    pacman -Sy --noconfirm curl git bash ca-certificates unzip wget openssl 2>/dev/null || true
 fi
 
 echo "::endgroup::"

@@ -30,11 +30,11 @@ if [[ "${BASH_SOURCE[0]:-$0}" == "bootstrap.sh" ]] && [[ ! -f "lib/common.sh" ]]
         echo "     git clone $BOOTSTRAP_REPO && cd bootstrap-toolkit && ./bootstrap.sh" >&2
         exit 1
     fi
-    cd "$BOOTSTRAP_TMPDIR"
+    cd "$BOOTSTRAP_TMPDIR" || exit 1
     BOOTSTRAP_DIR="$BOOTSTRAP_TMPDIR"
 else
     BOOTSTRAP_DIR="${BOOTSTRAP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)}"
-    cd "$BOOTSTRAP_DIR"
+    cd "$BOOTSTRAP_DIR" || exit 1
 fi
 
 export BOOTSTRAP_DIR

@@ -36,17 +36,19 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup CI environment
+        shell: bash
         run: bash tests/ci_setup.sh
 
       - name: Install git for checkout
+        shell: bash
         run: apt-get update -qq && apt-get install -y -qq git
 
       - name: Run git.sh
+        shell: bash
         run: |
           export NONINTERACTIVE=1
           export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
           source lib/common.sh
-          # Provide git user info non-interactively
           ask_yes_no() { return 0; }
           # Override read to supply dummy values
           read() { printf "CI Test User"; }
@@ -54,6 +56,7 @@ jobs:
           run
 
       - name: Verify git config
+        shell: bash
         run: |
           echo "::group::Git config verification"
           for key in user.name user.email init.defaultBranch pull.rebase color.ui; do
@@ -80,12 +83,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup CI environment
+        shell: bash
         run: bash tests/ci_setup.sh
 
-      - name: Install git for checkout
+      - name: Install git and openssh for checkout
+        shell: bash
         run: apt-get update -qq && apt-get install -y -qq git openssh-client
 
       - name: Run ssh.sh
+        shell: bash
         run: |
           export NONINTERACTIVE=1
           export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
@@ -101,6 +107,7 @@ jobs:
           run
 
       - name: Verify SSH key
+        shell: bash
         run: |
           echo "::group::SSH key verification"
           if [[ -f "$HOME/.ssh/id_ed25519" ]]; then
@@ -116,7 +123,6 @@ jobs:
               echo "  ✖  SSH public key missing"
               exit 1
           fi
-          # Check permissions
           priv_perms=$(stat -c %a "$HOME/.ssh/id_ed25519" 2>/dev/null || stat -f %Lp "$HOME/.ssh/id_ed25519")
           if [[ "$priv_perms" == "600" ]]; then
               echo "  ✔  Private key permissions: $priv_perms"
@@ -138,12 +144,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup CI environment
+        shell: bash
         run: bash tests/ci_setup.sh
 
       - name: Install git for checkout
+        shell: bash
         run: apt-get update -qq && apt-get install -y -qq git
 
       - name: Run shell.sh
+        shell: bash
         run: |
           export NONINTERACTIVE=1
           export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
@@ -153,6 +162,7 @@ jobs:
           run
 
       - name: Verify zsh installed
+        shell: bash
         run: |
           echo "::group::Shell config verification"
           if command -v zsh &>/dev/null; then
@@ -186,19 +196,21 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup CI environment
+        shell: bash
         run: bash tests/ci_setup.sh
 
       - name: Install git for checkout
+        shell: bash
         run: apt-get update -qq && apt-get install -y -qq git
 
       - name: Run vscode-settings.sh (expect graceful skip — no `code` command)
+        shell: bash
         run: |
           export NONINTERACTIVE=1
           export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
           source lib/common.sh
           ask_yes_no() { return 0; }
           source config/vscode-settings.sh
-          # `code` is not installed — script should return non-zero gracefully
           if run; then
               echo "  ⚠  Script succeeded unexpectedly (code should not be available)"
           else
@@ -206,6 +218,7 @@ jobs:
           fi
 
       - name: Mock `code` and retest
+        shell: bash
         run: |
           export NONINTERACTIVE=1
           export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
@@ -231,7 +244,6 @@ jobs:
               echo "  ✖  Script failed even with mock code"
               exit 1
           fi
-          # Verify settings were copied
           if [[ -f "$HOME/.config/Code/User/settings.json" ]]; then
               echo "  ✔  settings.json copied"
           else
