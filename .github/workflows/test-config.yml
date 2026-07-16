@@ -1,0 +1,239 @@
+# ==============================================================================
+# Test Config Scripts — Test each configuration script in CI
+# ==============================================================================
+name: Test Config Scripts
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'config/**'
+      - 'dotfiles/**'
+      - 'lib/**'
+      - 'bootstrap.sh'
+      - '.github/workflows/test-config.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'config/**'
+      - 'dotfiles/**'
+      - 'lib/**'
+      - 'bootstrap.sh'
+      - '.github/workflows/test-config.yml'
+  workflow_dispatch:
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Test git.sh — Git configuration
+  # --------------------------------------------------------------------------
+  test-git:
+    name: config/git.sh
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CI environment
+        run: bash tests/ci_setup.sh
+
+      - name: Install git for checkout
+        run: apt-get update -qq && apt-get install -y -qq git
+
+      - name: Run git.sh
+        run: |
+          export NONINTERACTIVE=1
+          export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
+          source lib/common.sh
+          # Provide git user info non-interactively
+          ask_yes_no() { return 0; }
+          # Override read to supply dummy values
+          read() { printf "CI Test User"; }
+          source config/git.sh
+          run
+
+      - name: Verify git config
+        run: |
+          echo "::group::Git config verification"
+          for key in user.name user.email init.defaultBranch pull.rebase color.ui; do
+              val=$(git config --global "$key" 2>/dev/null || echo "<unset>")
+              echo "  ℹ  $key = $val"
+          done
+          if [[ -f "$HOME/.gitconfig" ]]; then
+              echo "  ✔  .gitconfig copied to home"
+          else
+              echo "  ⚠  .gitconfig not in home (may not have been requested)"
+          fi
+          echo "::endgroup::"
+
+  # --------------------------------------------------------------------------
+  # Test ssh.sh — SSH key generation
+  # --------------------------------------------------------------------------
+  test-ssh:
+    name: config/ssh.sh
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CI environment
+        run: bash tests/ci_setup.sh
+
+      - name: Install git for checkout
+        run: apt-get update -qq && apt-get install -y -qq git openssh-client
+
+      - name: Run ssh.sh
+        run: |
+          export NONINTERACTIVE=1
+          export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
+          source lib/common.sh
+          ask_yes_no() { return 0; }
+          # Override read to supply dummy values for key type and comment
+          read() {
+              local var="$1"
+              if [[ "$var" == "-r" ]]; then var="$2"; fi
+              printf -v "$var" "ed25519"
+          }
+          source config/ssh.sh
+          run
+
+      - name: Verify SSH key
+        run: |
+          echo "::group::SSH key verification"
+          if [[ -f "$HOME/.ssh/id_ed25519" ]]; then
+              echo "  ✔  SSH private key exists"
+          else
+              echo "  ✖  SSH private key missing"
+              exit 1
+          fi
+          if [[ -f "$HOME/.ssh/id_ed25519.pub" ]]; then
+              echo "  ✔  SSH public key exists"
+              echo "  ℹ  Public key: $(cat "$HOME/.ssh/id_ed25519.pub")"
+          else
+              echo "  ✖  SSH public key missing"
+              exit 1
+          fi
+          # Check permissions
+          priv_perms=$(stat -c %a "$HOME/.ssh/id_ed25519" 2>/dev/null || stat -f %Lp "$HOME/.ssh/id_ed25519")
+          if [[ "$priv_perms" == "600" ]]; then
+              echo "  ✔  Private key permissions: $priv_perms"
+          else
+              echo "  ⚠  Private key permissions: $priv_perms (expected 600)"
+          fi
+          echo "::endgroup::"
+
+  # --------------------------------------------------------------------------
+  # Test shell.sh — Zsh + Oh My Zsh
+  # --------------------------------------------------------------------------
+  test-shell:
+    name: config/shell.sh
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CI environment
+        run: bash tests/ci_setup.sh
+
+      - name: Install git for checkout
+        run: apt-get update -qq && apt-get install -y -qq git
+
+      - name: Run shell.sh
+        run: |
+          export NONINTERACTIVE=1
+          export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
+          source lib/common.sh
+          ask_yes_no() { return 0; }
+          source config/shell.sh
+          run
+
+      - name: Verify zsh installed
+        run: |
+          echo "::group::Shell config verification"
+          if command -v zsh &>/dev/null; then
+              echo "  ✔  zsh is installed: $(zsh --version)"
+          else
+              echo "  ✖  zsh is NOT installed"
+              exit 1
+          fi
+          if [[ -d "$HOME/.oh-my-zsh" ]]; then
+              echo "  ✔  Oh My Zsh is installed"
+          else
+              echo "  ⚠  Oh My Zsh not installed (may have been skipped)"
+          fi
+          if [[ -f "$HOME/.zshrc" ]]; then
+              echo "  ✔  .zshrc exists in home"
+          else
+              echo "  ⚠  .zshrc not in home"
+          fi
+          echo "::endgroup::"
+
+  # --------------------------------------------------------------------------
+  # Test vscode-settings.sh — needs `code` command (test skip path)
+  # --------------------------------------------------------------------------
+  test-vscode-settings:
+    name: config/vscode-settings.sh
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CI environment
+        run: bash tests/ci_setup.sh
+
+      - name: Install git for checkout
+        run: apt-get update -qq && apt-get install -y -qq git
+
+      - name: Run vscode-settings.sh (expect graceful skip — no `code` command)
+        run: |
+          export NONINTERACTIVE=1
+          export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
+          source lib/common.sh
+          ask_yes_no() { return 0; }
+          source config/vscode-settings.sh
+          # `code` is not installed — script should return non-zero gracefully
+          if run; then
+              echo "  ⚠  Script succeeded unexpectedly (code should not be available)"
+          else
+              echo "  ✔  Script gracefully failed (code not installed — expected)"
+          fi
+
+      - name: Mock `code` and retest
+        run: |
+          export NONINTERACTIVE=1
+          export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
+          source lib/common.sh
+          ask_yes_no() { return 0; }
+          # Create a mock `code` command
+          cat > /usr/local/bin/code <<'MOCK'
+          #!/usr/bin/env bash
+          case "$1" in
+              --version) echo "1.0.0-mock" ;;
+              --list-extensions) ;;
+              --install-extension) exit 0 ;;
+              *) exit 0 ;;
+          esac
+          MOCK
+          chmod +x /usr/local/bin/code
+          # Source fresh — unset previous run()
+          unset -f run 2>/dev/null || true
+          source config/vscode-settings.sh
+          if run; then
+              echo "  ✔  Script succeeded with mock code command"
+          else
+              echo "  ✖  Script failed even with mock code"
+              exit 1
+          fi
+          # Verify settings were copied
+          if [[ -f "$HOME/.config/Code/User/settings.json" ]]; then
+              echo "  ✔  settings.json copied"
+          else
+              echo "  ⚠  settings.json not found"
+          fi

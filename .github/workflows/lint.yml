@@ -1,0 +1,111 @@
+# ==============================================================================
+# Lint — Run shellcheck and syntax checks on all scripts
+# ==============================================================================
+name: Lint
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+
+      - name: Run shellcheck
+        run: |
+          echo "::group::Shellcheck results"
+          failed=0
+          for f in \
+              bootstrap.sh \
+              lib/common.sh \
+              install/*.sh \
+              config/*.sh \
+              tests/ci_setup.sh \
+              tests/ci_run_script.sh \
+              tests/test_shellcheck.sh; do
+              if shellcheck -x "$f"; then
+                  echo "  ✔  $f"
+              else
+                  echo "  ✖  $f"
+                  failed=1
+              fi
+          done
+          echo "::endgroup::"
+          exit $failed
+
+      - name: Bash syntax check
+        run: |
+          echo "::group::Bash syntax check"
+          failed=0
+          for f in \
+              bootstrap.sh \
+              lib/common.sh \
+              install/*.sh \
+              config/*.sh \
+              tests/*.sh; do
+              if bash -n "$f"; then
+                  echo "  ✔  $f"
+              else
+                  echo "  ✖  $f"
+                  failed=1
+              fi
+          done
+          echo "::endgroup::"
+          exit $failed
+
+  verify-structure:
+    name: Verify repository structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check all scripts define run()
+        run: |
+          failed=0
+          for f in install/*.sh config/*.sh; do
+              if ! grep -qE '^\s*run\s*\(\)' "$f"; then
+                  echo "  ✖  $f does not define run()"
+                  failed=1
+              else
+                  echo "  ✔  $f defines run()"
+              fi
+          done
+          exit $failed
+
+      - name: Check all scripts are executable
+        run: |
+          failed=0
+          for f in bootstrap.sh install/*.sh config/*.sh lib/*.sh tests/*.sh; do
+              if [[ ! -x "$f" ]]; then
+                  echo "  ✖  $f is not executable"
+                  failed=1
+              else
+                  echo "  ✔  $f is executable"
+              fi
+          done
+          exit $failed
+
+      - name: Check STEPS array matches files
+        run: |
+          failed=0
+          # Extract script paths from STEPS array in bootstrap.sh
+          paths=$(grep -oP '"\Kinstall/[^|]+|config/[^|]+' bootstrap.sh | sort)
+          for p in $paths; do
+              if [[ ! -f "$p" ]]; then
+                  echo "  ✖  Referenced in STEPS but missing: $p"
+                  failed=1
+              else
+                  echo "  ✔  STEPS reference exists: $p"
+              fi
+          done
+          exit $failed

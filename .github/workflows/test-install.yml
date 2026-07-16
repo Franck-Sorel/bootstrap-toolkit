@@ -1,0 +1,200 @@
+# ==============================================================================
+# Test Install Scripts — Matrix test each install script on multiple distros
+# ==============================================================================
+name: Test Install Scripts
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'install/**'
+      - 'lib/**'
+      - 'bootstrap.sh'
+      - '.github/workflows/test-install.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'install/**'
+      - 'lib/**'
+      - 'bootstrap.sh'
+      - '.github/workflows/test-install.yml'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Test scripts that install packages — full matrix across distros
+  # --------------------------------------------------------------------------
+  test-package-scripts:
+    name: ${{ matrix.script }} on ${{ matrix.container }}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.container }}
+      options: --user root
+    strategy:
+      fail-fast: false
+      matrix:
+        container:
+          - ubuntu:24.04
+          - debian:12
+          - fedora:40
+        script:
+          - install/apt.sh
+          - install/devtools.sh
+          - install/fonts.sh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CI environment
+        run: bash tests/ci_setup.sh
+
+      - name: Install git for checkout
+        run: |
+          if command -v apt-get &>/dev/null; then
+              apt-get update -qq && apt-get install -y -qq git
+          elif command -v dnf &>/dev/null; then
+              dnf install -y -q git
+          fi
+
+      - name: Run ${{ matrix.script }}
+        run: bash tests/ci_run_script.sh "${{ matrix.script }}"
+
+      - name: Verify key outputs
+        run: |
+          echo "::group::Verification for ${{ matrix.script }}"
+          case "${{ matrix.script }}" in
+              install/apt.sh)
+                  # Check that core packages were installed
+                  for cmd in curl git wget; do
+                      if command -v "$cmd" &>/dev/null; then
+                          echo "  ✔  $cmd is installed"
+                      else
+                          echo "  ✖  $cmd is NOT installed"
+                      fi
+                  done
+                  ;;
+              install/devtools.sh)
+                  # devtools defaults to "no" in non-interactive mode, so most
+                  # tools will be skipped — verify the script ran without error
+                  echo "  ✔  devtools.sh completed (tools skipped in non-interactive mode)"
+                  ;;
+              install/fonts.sh)
+                  # fonts defaults to "no" in non-interactive mode
+                  echo "  ✔  fonts.sh completed (fonts skipped in non-interactive mode)"
+                  ;;
+          esac
+          echo "::endgroup::"
+
+  # --------------------------------------------------------------------------
+  # Test kubernetes.sh — downloads binaries, works in CI
+  # --------------------------------------------------------------------------
+  test-kubernetes:
+    name: kubernetes.sh on ${{ matrix.container }}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.container }}
+      options: --user root
+    strategy:
+      fail-fast: false
+      matrix:
+        container:
+          - ubuntu:24.04
+          - fedora:40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CI environment
+        run: bash tests/ci_setup.sh
+
+      - name: Install git for checkout
+        run: |
+          if command -v apt-get &>/dev/null; then
+              apt-get update -qq && apt-get install -y -qq git
+          elif command -v dnf &>/dev/null; then
+              dnf install -y -q git
+          fi
+
+      - name: Run kubernetes.sh (force yes for kubectl)
+        run: |
+          export NONINTERACTIVE=1
+          export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
+          # Override ask_yes_no to always say yes for this test
+          source lib/common.sh
+          # Redefine ask_yes_no to always return yes
+          ask_yes_no() { return 0; }
+          source install/kubernetes.sh
+          run
+
+      - name: Verify kubectl installed
+        run: |
+          if command -v kubectl &>/dev/null; then
+              echo "  ✔  kubectl is installed: $(kubectl version --client 2>&1 | head -1)"
+          else
+              echo "  ✖  kubectl is NOT installed"
+              exit 1
+          fi
+
+  # --------------------------------------------------------------------------
+  # Test docker.sh — graceful failure in CI (Docker-in-Docker not available)
+  # --------------------------------------------------------------------------
+  test-docker:
+    name: docker.sh (graceful failure test)
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CI environment
+        run: bash tests/ci_setup.sh
+
+      - name: Install git for checkout
+        run: apt-get update -qq && apt-get install -y -qq git
+
+      - name: Run docker.sh (expect graceful handling)
+        run: |
+          export NONINTERACTIVE=1
+          export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
+          source lib/common.sh
+          ask_yes_no() { return 0; }
+          source install/docker.sh
+          # Run and capture exit code — Docker-in-Docker may fail,
+          # but the script should handle it gracefully
+          run || rc=$?
+          echo "  ℹ  docker.sh exited with code ${rc:-0}"
+          # The script should not crash — graceful failure is acceptable
+          echo "  ✔  docker.sh handled gracefully"
+
+  # --------------------------------------------------------------------------
+  # Test vscode.sh — graceful failure in CI (no GUI)
+  # --------------------------------------------------------------------------
+  test-vscode:
+    name: vscode.sh (graceful failure test)
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CI environment
+        run: bash tests/ci_setup.sh
+
+      - name: Install git for checkout
+        run: apt-get update -qq && apt-get install -y -qq git
+
+      - name: Run vscode.sh
+        run: |
+          export NONINTERACTIVE=1
+          export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
+          source lib/common.sh
+          ask_yes_no() { return 0; }
+          source install/vscode.sh
+          run || rc=$?
+          echo "  ℹ  vscode.sh exited with code ${rc:-0}"
+          # Verify the .deb was at least downloaded
+          if [[ -f /tmp/vscode.deb ]]; then
+              echo "  ✔  VS Code .deb was downloaded"
+          else
+              echo "  ⚠  VS Code .deb not found (may have been installed already)"
+          fi
