@@ -22,28 +22,38 @@ run() {
 
     if [[ -n "$current_name" ]]; then
         log_info "Current git name: $current_name"
-        if ask_yes_no "Change git name?" "n"; then
+        if [[ "${NONINTERACTIVE:-}" != "1" ]] && ask_yes_no "Change git name?" "n"; then
             printf "  Enter your name: "
             read -r git_name </dev/tty 2>/dev/null || git_name=""
         else
             git_name="$current_name"
         fi
     else
-        printf "  Enter your git name: "
-        read -r git_name </dev/tty 2>/dev/null || git_name=""
+        if [[ "${NONINTERACTIVE:-}" == "1" ]]; then
+            git_name="Developer"
+            log_info "Git name [auto: $git_name]"
+        else
+            printf "  Enter your git name: "
+            read -r git_name </dev/tty 2>/dev/null || git_name=""
+        fi
     fi
 
     if [[ -n "$current_email" ]]; then
         log_info "Current git email: $current_email"
-        if ask_yes_no "Change git email?" "n"; then
+        if [[ "${NONINTERACTIVE:-}" != "1" ]] && ask_yes_no "Change git email?" "n"; then
             printf "  Enter your email: "
             read -r git_email </dev/tty 2>/dev/null || git_email=""
         else
             git_email="$current_email"
         fi
     else
-        printf "  Enter your git email: "
-        read -r git_email </dev/tty 2>/dev/null || git_email=""
+        if [[ "${NONINTERACTIVE:-}" == "1" ]]; then
+            git_email="dev@localhost"
+            log_info "Git email [auto: $git_email]"
+        else
+            printf "  Enter your git email: "
+            read -r git_email </dev/tty 2>/dev/null || git_email=""
+        fi
     fi
 
     # Apply config

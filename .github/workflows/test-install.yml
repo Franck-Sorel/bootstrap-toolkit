@@ -139,6 +139,128 @@ jobs:
           fi
 
   # --------------------------------------------------------------------------
+  # Test nodejs.sh — installs Node.js + npm + pnpm via NodeSource in CI
+  # --------------------------------------------------------------------------
+  test-nodejs:
+    name: nodejs.sh on ${{ matrix.container }}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.container }}
+      options: --user root
+    strategy:
+      fail-fast: false
+      matrix:
+        container:
+          - ubuntu:24.04
+          - fedora:40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CI environment
+        shell: bash
+        run: bash tests/ci_setup.sh
+
+      - name: Install git for checkout
+        shell: bash
+        run: |
+          if command -v apt-get &>/dev/null; then
+              apt-get update -qq && apt-get install -y -qq git
+          elif command -v dnf &>/dev/null; then
+              dnf install -y -q git
+          fi
+
+      - name: Run nodejs.sh (force yes for Node + pnpm, no for global packages)
+        shell: bash
+        run: |
+          export NONINTERACTIVE=1
+          export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
+          source lib/common.sh
+          # Force yes for Node.js and pnpm, no for the curated global packages
+          ask_yes_no() {
+            case "$1" in
+              *"global npm packages"*) return 1 ;;  # skip the package loop
+              *) return 0 ;;
+            esac
+          }
+          source install/nodejs.sh
+          run || rc=$?
+          echo "  ℹ  nodejs.sh exited with code ${rc:-0}"
+
+      - name: Verify Node.js, npm, and pnpm installed
+        shell: bash
+        run: |
+          echo "::group::Node ecosystem verification"
+          for cmd in node npm pnpm; do
+            if command -v "$cmd" &>/dev/null; then
+              echo "  ✔  $cmd is installed: $("$cmd" --version 2>&1 | head -1)"
+            else
+              echo "  ✖  $cmd is NOT installed"
+              exit 1
+            fi
+          done
+          echo "::endgroup::"
+
+  # --------------------------------------------------------------------------
+  # Test ollama.sh — archive-based install using the local ollama.tar.gz
+  # --------------------------------------------------------------------------
+  test-ollama:
+    name: ollama.sh on ${{ matrix.container }}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.container }}
+      options: --user root
+    strategy:
+      fail-fast: false
+      matrix:
+        container:
+          - ubuntu:24.04
+          - fedora:40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup CI environment
+        shell: bash
+        run: bash tests/ci_setup.sh
+
+      - name: Install git for checkout
+        shell: bash
+        run: |
+          if command -v apt-get &>/dev/null; then
+              apt-get update -qq && apt-get install -y -qq git
+          elif command -v dnf &>/dev/null; then
+              dnf install -y -q git
+          fi
+
+      - name: Run ollama.sh with local archive
+        shell: bash
+        run: |
+          export NONINTERACTIVE=1
+          export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
+          # Point to the local archive instead of downloading from the internet
+          export OLLAMA_ARCHIVE_URL="file://$GITHUB_WORKSPACE/ollama.tar.gz"
+          source lib/common.sh
+          # Force yes for install, no for systemd service (no systemd in containers)
+          ask_yes_no() {
+            case "$1" in
+              *"systemd"*) return 1 ;;
+              *) return 0 ;;
+            esac
+          }
+          source install/ollama.sh
+          run || rc=$?
+          echo "  ℹ  ollama.sh exited with code ${rc:-0}"
+
+      - name: Verify ollama installed
+        shell: bash
+        run: |
+          if command -v ollama &>/dev/null; then
+              echo "  ✔  ollama is installed: $(ollama --version 2>&1)"
+          else
+              echo "  ✖  ollama is NOT installed"
+              exit 1
+          fi
+
+  # --------------------------------------------------------------------------
   # Test docker.sh — graceful failure in CI (Docker-in-Docker not available)
   # --------------------------------------------------------------------------
   test-docker:

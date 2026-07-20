@@ -97,12 +97,6 @@ jobs:
           export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
           source lib/common.sh
           ask_yes_no() { return 0; }
-          # Override read to supply dummy values for key type and comment
-          read() {
-              local var="$1"
-              if [[ "$var" == "-r" ]]; then var="$2"; fi
-              printf -v "$var" "ed25519"
-          }
           source config/ssh.sh
           run
 

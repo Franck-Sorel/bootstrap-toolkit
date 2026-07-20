@@ -18,7 +18,9 @@ bootstrap-toolkit/
 │   ├── docker.sh             # Docker Engine + Compose
 │   ├── kubernetes.sh         # kubectl, helm, k9s, kubectx
 │   ├── vscode.sh             # Visual Studio Code
-│   ├── devtools.sh           # jq, fzf, tmux, ripgrep, bat, neovim, nvm, pyenv
+│   ├── devtools.sh           # jq, fzf, tmux, ripgrep, bat, neovim, pyenv
+│   ├── nodejs.sh             # Node.js + npm, pnpm, global npm packages
+│   ├── ollama.sh             # Ollama local LLM runner (archive-based)
 │   └── fonts.sh              # Nerd Fonts
 ├── config/                   # Configuration scripts (each defines run())
 │   ├── git.sh                # Git global config

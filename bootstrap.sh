@@ -72,6 +72,8 @@ STEPS=(
     "install/kubernetes.sh|Kubernetes tools (kubectl, helm)|n"
     "install/vscode.sh|Visual Studio Code|y"
     "install/devtools.sh|Developer tools (jq, fzf, tmux, etc.)|n"
+    "install/nodejs.sh|Node.js, npm, pnpm & global packages|n"
+    "install/ollama.sh|Ollama (local LLM runner)|n"
     "install/fonts.sh|Nerd Fonts|n"
     "config/git.sh|Git configuration|y"
     "config/ssh.sh|SSH key generation|n"

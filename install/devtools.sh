@@ -49,25 +49,6 @@ run() {
     install_tool lazygit
     install_tool delta git-delta git-delta git-delta git-delta
 
-    # Node.js via nvm (special handling)
-    if has_command node; then
-        log_info "Node.js already installed ($(node --version))"
-    else
-        if ask_yes_no "Install Node.js via nvm?" "n"; then
-            run_step "Installing nvm" \
-                curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash || {
-                log_error "Failed to install nvm"
-                ((failed++))
-            }
-            # Source nvm and install LTS
-            if [[ -f "$HOME/.nvm/nvm.sh" ]]; then
-                # shellcheck disable=SC1091
-                source "$HOME/.nvm/nvm.sh"
-                run_step "Installing Node.js LTS" nvm install --lts || ((failed++))
-            fi
-        fi
-    fi
-
     # Python via pyenv (special handling)
     if has_command python3; then
         log_info "Python3 already installed ($(python3 --version))"

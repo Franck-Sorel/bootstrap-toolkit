@@ -30,7 +30,9 @@ developer environment. **Every step asks** — press `y` to install, `n` to skip
 | Docker | Docker Engine + docker group | Yes |
 | Kubernetes | kubectl, helm, k9s, kubectx/kubens | No |
 | VS Code | Visual Studio Code | Yes |
-| Dev tools | jq, fzf, tmux, ripgrep, bat, neovim, nvm, pyenv | No |
+| Dev tools | jq, fzf, tmux, ripgrep, bat, neovim, pyenv | No |
+| Node.js | Node.js LTS + npm, pnpm, global npm packages | No |
+| Ollama | Local LLM runner (archive-based install) | No |
 | Nerd Fonts | JetBrainsMono, FiraCode, Hack, Meslo, SourceCodePro | No |
 
 ### Config Steps
@@ -96,6 +98,8 @@ bootstrap-toolkit/
 │   ├── kubernetes.sh
 │   ├── vscode.sh
 │   ├── devtools.sh
+│   ├── nodejs.sh
+│   ├── ollama.sh
 │   └── fonts.sh
 ├── config/                   # Configuration scripts
 │   ├── git.sh

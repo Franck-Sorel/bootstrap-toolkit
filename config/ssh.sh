@@ -40,15 +40,26 @@ run() {
     # Collect key details
     local key_type key_comment key_path
 
-    printf "  Key type [ed25519/rsa] (default: ed25519): "
-    read -r key_type </dev/tty 2>/dev/null || key_type=""
-    key_type="${key_type:-ed25519}"
+    if [[ "${NONINTERACTIVE:-}" == "1" ]]; then
+        key_type="ed25519"
+        log_info "Key type [auto: ed25519]"
+    else
+        printf "  Key type [ed25519/rsa] (default: ed25519): "
+        read -r key_type </dev/tty 2>/dev/null || key_type=""
+        key_type="${key_type:-ed25519}"
+    fi
 
     local default_comment
-    default_comment="${USER}@$(hostname 2>/dev/null || echo localhost)"
-    printf "  Comment (default: %s): " "$default_comment"
-    read -r key_comment </dev/tty 2>/dev/null || key_comment=""
-    key_comment="${key_comment:-$default_comment}"
+    default_comment="${USER:-$(whoami 2>/dev/null || echo user)}@$(hostname 2>/dev/null || echo localhost)"
+
+    if [[ "${NONINTERACTIVE:-}" == "1" ]]; then
+        key_comment="$default_comment"
+        log_info "Comment [auto: $default_comment]"
+    else
+        printf "  Comment (default: %s): " "$default_comment"
+        read -r key_comment </dev/tty 2>/dev/null || key_comment=""
+        key_comment="${key_comment:-$default_comment}"
+    fi
 
     case "$key_type" in
         rsa)
