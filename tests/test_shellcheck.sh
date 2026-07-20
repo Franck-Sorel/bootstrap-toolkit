@@ -19,6 +19,8 @@ files=(
     "$REPO_DIR/install/kubernetes.sh"
     "$REPO_DIR/install/vscode.sh"
     "$REPO_DIR/install/devtools.sh"
+    "$REPO_DIR/install/nodejs.sh"
+    "$REPO_DIR/install/ollama.sh"
     "$REPO_DIR/install/fonts.sh"
     "$REPO_DIR/config/git.sh"
     "$REPO_DIR/config/ssh.sh"

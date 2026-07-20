@@ -12,7 +12,7 @@
 # ==============================================================================
 
 # Default download URL — update this to wherever you host the archive.
-readonly OLLAMA_ARCHIVE_URL="${OLLAMA_ARCHIVE_URL:-https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tgz}"
+OLLAMA_ARCHIVE_URL="${OLLAMA_ARCHIVE_URL:-https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tgz}"
 
 run() {
     local failed=0
@@ -116,7 +116,7 @@ Group=ollama
 Restart=always
 RestartSec=3
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-Environment="OLLAMA_HOST=0.0.0.0"
+Environment="OLLAMA_HOST=127.0.0.1"
 
 [Install]
 WantedBy=default.target

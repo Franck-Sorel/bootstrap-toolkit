@@ -37,7 +37,7 @@ run() {
         case "$pm" in
             apt)
                 run_step "Adding NodeSource LTS repository" \
-                    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - || {
+                    bash -c 'curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -' || {
                     log_error "Failed to add NodeSource repository"
                     ((failed++))
                 }
