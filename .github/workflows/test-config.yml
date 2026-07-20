@@ -71,61 +71,6 @@ jobs:
           echo "::endgroup::"
 
   # --------------------------------------------------------------------------
-  # Test ssh.sh — SSH key generation
-  # --------------------------------------------------------------------------
-  test-ssh:
-    name: config/ssh.sh
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:24.04
-      options: --user root
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup CI environment
-        shell: bash
-        run: bash tests/ci_setup.sh
-
-      - name: Install git and openssh for checkout
-        shell: bash
-        run: apt-get update -qq && apt-get install -y -qq git openssh-client
-
-      - name: Run ssh.sh
-        shell: bash
-        run: |
-          export NONINTERACTIVE=1
-          export BOOTSTRAP_DIR="$GITHUB_WORKSPACE"
-          source lib/common.sh
-          ask_yes_no() { return 0; }
-          source config/ssh.sh
-          run
-
-      - name: Verify SSH key
-        shell: bash
-        run: |
-          echo "::group::SSH key verification"
-          if [[ -f "$HOME/.ssh/id_ed25519" ]]; then
-              echo "  ✔  SSH private key exists"
-          else
-              echo "  ✖  SSH private key missing"
-              exit 1
-          fi
-          if [[ -f "$HOME/.ssh/id_ed25519.pub" ]]; then
-              echo "  ✔  SSH public key exists"
-              echo "  ℹ  Public key: $(cat "$HOME/.ssh/id_ed25519.pub")"
-          else
-              echo "  ✖  SSH public key missing"
-              exit 1
-          fi
-          priv_perms=$(stat -c %a "$HOME/.ssh/id_ed25519" 2>/dev/null || stat -f %Lp "$HOME/.ssh/id_ed25519")
-          if [[ "$priv_perms" == "600" ]]; then
-              echo "  ✔  Private key permissions: $priv_perms"
-          else
-              echo "  ⚠  Private key permissions: $priv_perms (expected 600)"
-          fi
-          echo "::endgroup::"
-
-  # --------------------------------------------------------------------------
   # Test shell.sh — Zsh + Oh My Zsh
   # --------------------------------------------------------------------------
   test-shell:

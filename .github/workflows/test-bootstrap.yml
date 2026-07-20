@@ -86,7 +86,6 @@ jobs:
           path: |
             $HOME/.gitconfig
             $HOME/.zshrc
-            $HOME/.ssh/
           retention-days: 7
 
   # --------------------------------------------------------------------------

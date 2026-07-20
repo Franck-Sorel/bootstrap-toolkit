@@ -39,9 +39,12 @@ developer environment. **Every step asks** — press `y` to install, `n` to skip
 | Step | Description | Default |
 |---|---|---|
 | Git | user.name, user.email, sensible defaults, .gitconfig | Yes |
-| SSH | SSH key generation (ed25519/rsa), ssh-agent | No |
 | Shell | zsh as default, Oh My Zsh, plugins, .zshrc | Yes |
 | VS Code | settings.json + recommended extensions | No |
+
+> **SSH keys** are not generated automatically. A setup guide is printed at the
+> end of the bootstrap with step-by-step instructions for creating and
+> configuring SSH keys for GitHub, GitLab, and Bitbucket.
 
 ---
 
@@ -103,7 +106,6 @@ bootstrap-toolkit/
 │   └── fonts.sh
 ├── config/                   # Configuration scripts
 │   ├── git.sh
-│   ├── ssh.sh
 │   ├── shell.sh
 │   └── vscode-settings.sh
 ├── dotfiles/                 # Static dotfiles

@@ -76,7 +76,6 @@ STEPS=(
     "install/ollama.sh|Ollama (local LLM runner)|n"
     "install/fonts.sh|Nerd Fonts|n"
     "config/git.sh|Git configuration|y"
-    "config/ssh.sh|SSH key generation|n"
     "config/shell.sh|Shell configuration (zsh)|y"
     "config/vscode-settings.sh|VS Code settings & extensions|n"
 )
@@ -132,7 +131,51 @@ main() {
 
     print_summary
 
+    print_ssh_guide
+
     log_success "Bootstrap complete! You may need to restart your shell."
+}
+
+# ------------------------------------------------------------------------------
+# Post-bootstrap: SSH key setup guide
+# ------------------------------------------------------------------------------
+print_ssh_guide() {
+    cat <<'SSH_GUIDE'
+
+  ╔═══════════════════════════════════════════════════════════════╗
+  ║                   🔑  SSH Key Setup Guide                    ║
+  ╚═══════════════════════════════════════════════════════════════╝
+
+  To connect to GitHub (or any Git host) via SSH, generate a key:
+
+    1. Create an Ed25519 key (recommended):
+
+         ssh-keygen -t ed25519 -C "your-email@example.com"
+
+       Or RSA (legacy):
+
+         ssh-keygen -t rsa -b 4096 -C "your-email@example.com"
+
+    2. Start the SSH agent and add your key:
+
+         eval "$(ssh-agent -s)"
+         ssh-add ~/.ssh/id_ed25519
+
+    3. Copy the public key:
+
+         cat ~/.ssh/id_ed25519.pub
+
+    4. Add it to your Git host:
+
+         • GitHub:   https://github.com/settings/keys
+         • GitLab:   https://gitlab.com/-/profile/keys
+         • Bitbucket: https://bitbucket.org/account/settings/ssh-keys/
+
+    5. Test the connection:
+
+         ssh -T git@github.com
+
+SSH_GUIDE
 }
 
 main "$@"

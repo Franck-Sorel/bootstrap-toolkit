@@ -24,7 +24,6 @@ bootstrap-toolkit/
 │   └── fonts.sh              # Nerd Fonts
 ├── config/                   # Configuration scripts (each defines run())
 │   ├── git.sh                # Git global config
-│   ├── ssh.sh                # SSH key generation
 │   ├── shell.sh              # Zsh + Oh My Zsh + plugins
 │   └── vscode-settings.sh    # VS Code settings + extensions
 ├── dotfiles/                 # Static dotfiles copied to $HOME
