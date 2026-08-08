@@ -1,0 +1,79 @@
+name: Download and Compress Video
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  process-video:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for proper diffing
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository -y universe
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Download video
+        run: |
+          curl -L --fail \
+            'https://dv45-1.sibnet.ru/56/36/44/5636444.mp4?st=X-yFS2vnXvJm97A-bZ5L_A&e=1786236000&stor=45&noip=1' \
+            -o video_original.mp4
+
+      - name: Check original size
+        run: ls -lh video_original.mp4
+
+      - name: Compress Stage 1 (HEVC + Downscale)
+        run: |
+          ffmpeg -i video_original.mp4 \
+            -c:v libx265 -crf 28 -preset medium \
+            -vf "scale=-2:720" \
+            -c:a aac -b:a 128k \
+            -y video_stage1.mp4
+
+      - name: Check Stage 1 size
+        run: ls -lh video_stage1.mp4
+
+      - name: Compress Stage 2 (Aggressive)
+        run: |
+          ffmpeg -i video_stage1.mp4 \
+            -c:v libx265 -crf 30 -preset fast \
+            -c:a aac -b:a 96k \
+            -y video.mp4
+
+      - name: Check final size
+        run: |
+          ls -lh video.mp4
+          size=$(stat -c%s video.mp4)
+          limit=104857600
+          if [ "$size" -gt "$limit" ]; then
+            echo "Error: Final video size ($size bytes) exceeds 100MB limit ($limit bytes)."
+            exit 1
+          fi
+          echo "Success: Video size is within limits."
+
+      - name: Commit and push video
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          
+          # Clean up intermediate files
+          rm -f video_original.mp4 video_stage1.mp4
+          
+          git add video.mp4
+          if ! git diff --staged --quiet; then
+            git commit -m "Download and compress video (<100MB)"
+            git push
+          else
+            echo "No changes to commit."
+          fi   
