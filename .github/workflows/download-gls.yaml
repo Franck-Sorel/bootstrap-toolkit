@@ -25,7 +25,7 @@ jobs:
         run: |
           curl -L --fail \
             'https://dv45-1.sibnet.ru/56/36/44/5636444.mp4?st=X-yFS2vnXvJm97A-bZ5L_A&e=1786236000&stor=45&noip=1' \
-            -o video.mp4
+            -o video-gls.mp4
 
       - name: Check video
         run: |
@@ -45,7 +45,7 @@ jobs:
           git add .gitattributes
           
           # 3. Add the video file (LFS converts it to a pointer upon add)
-          git add video.mp4
+          git add video-gls.mp4
           
           # 4. Verify LFS status (optional debug)
           git lfs ls-files
