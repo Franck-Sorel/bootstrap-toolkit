@@ -19,6 +19,9 @@ on:
         required: false
         type: string
         default: 'Download video (LFS)'
+  push: 
+    branches:
+      -  main
 
 permissions:
   contents: write
