@@ -3,56 +3,77 @@ name: Download video GLS
 on:
   workflow_dispatch:
 
+# Fix 1: Explicitly grant read access to contents for LFS fetching
 permissions:
-  contents: write
+  contents: write # Write is needed for push, but 'read' is strictly required for checkout/LFS
 
 jobs:
   download:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout repository with LFS
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          lfs: true # Installs git-lfs and attempts to fetch objects
 
-      - name: Install Git LFS
+      # Fix 2: Explicitly fetch and checkout LFS objects to ensure pointers are replaced
+      # This resolves issues where checkout@v4 installs LFS but fails to pull large files
+      - name: Ensure LFS objects are fetched
         run: |
-          sudo apt-get update
-          sudo apt-get install -y git-lfs
-          git lfs install
+          git lfs fetch --all
+          git lfs checkout
 
       - name: Download video
+        id: download_step
         run: |
-          curl -L --fail \
-            'https://dv45-1.sibnet.ru/56/36/44/5636444.mp4?st=X-yFS2vnXvJm97A-bZ5L_A&e=1786236000&stor=45&noip=1' \
-            -o video-gls.mp4
+          URL="https://dv45-1.sibnet.ru/56/36/44/5636444.mp4?st=X-yFS2vnXvJm97A-bZ5L_A&e=1786236000&stor=45&noip=1"
+          echo "Downloading video..."
+          
+          if ! curl -L --fail --location --max-time 60 -o video-gls.mp4 "$URL"; then
+            echo "::error::Download failed. The URL may be expired or blocked."
+            exit 1
+          fi
 
-      - name: Check video
-        run: |
-          ls -lh video-gls.mp4
-          file video-gls.mp4
+          echo "Validating file..."
+          FILE_SIZE=$(stat -c%s "video-gls.mp4")
+          FILE_TYPE=$(file -b --mime-type video-gls.mp4)
+          
+          echo "File size: $FILE_SIZE bytes"
+          echo "MIME type: $FILE_TYPE"
+
+          if [ "$FILE_SIZE" -lt 10000 ]; then
+            echo "::error::File too small ($FILE_SIZE bytes). Likely an HTTP error page."
+            cat video-gls.mp4
+            exit 1
+          fi
+
+          if [[ "$FILE_TYPE" != "video/mp4" ]]; then
+            echo "::error::File is not a valid MP4 (detected: $FILE_TYPE). Download corrupted."
+            head -c 500 video-gls.mp4
+            exit 1
+          fi
+          echo "Download successful and valid."
 
       - name: Commit and push video with LFS
+        if: success()
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           
-          # 1. Track the file type (creates/updates .gitattributes)
+          # Track MP4 files (idempotent: updates .gitattributes if needed)
           git lfs track "*.mp4"
           
-          # 2. Add .gitattributes FIRST so Git knows to treat the next file as LFS
           git add .gitattributes
-          
-          # 3. Add the video file (LFS converts it to a pointer upon add)
           git add video-gls.mp4
           
-          # 4. Verify LFS status (optional debug)
+          # Debug: Show LFS status
           git lfs ls-files
-          
-          # 5. Commit and Push
+          git status
+
           if ! git diff --staged --quiet; then
-            git commit -m "Download video (LFS)"
+            git commit -m "Download video (LFS) - $(date +%Y-%m-%d)"
             git push
           else
             echo "No changes to commit."
