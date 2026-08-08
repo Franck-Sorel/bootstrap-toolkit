@@ -29,8 +29,8 @@ jobs:
 
       - name: Check video
         run: |
-          ls -lh video.mp4
-          file video.mp4
+          ls -lh video-gls.mp4
+          file video-gls.mp4
 
       - name: Commit and push video with LFS
         run: |
