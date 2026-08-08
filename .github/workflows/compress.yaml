@@ -1,0 +1,83 @@
+name: Download and Compress Video compress
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  process-video:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Download video
+        run: |
+          curl -L --fail \
+            'https://dv45-1.sibnet.ru/56/36/44/5636444.mp4?st=X-yFS2vnXvJm97A-bZ5L_A&e=1786236000&stor=45&noip=1' \
+            -o video_original.mp4
+
+      - name: Check original size
+        run: ls -lh video_original.mp4
+
+      # Single optimized compression step using Two-Pass Encoding
+      # Targets 90MB to safely stay under the 100MB limit
+      - name: Compress video (Two-Pass Target 90MB)
+        run: |
+          # Get duration in seconds
+          duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 video_original.mp4)
+          
+          # Target size in KB (90MB = 92160KB). Allow 128k for audio.
+          # Formula: (TargetSizeKB * 8192 / Duration) - AudioBitrate
+          target_size_kb=92160
+          audio_bitrate=128
+          video_bitrate=$(awk "BEGIN {printf \"%.0f\", (($target_size_kb * 8192 / $duration) - ($audio_bitrate * 1000)) / 1000}")
+          
+          echo "Duration: $duration seconds"
+          echo "Target Video Bitrate: ${video_bitrate}k"
+          
+          # Pass 1: Analyze
+          ffmpeg -y -i video_original.mp4 \
+            -c:v libx264 -preset medium -b:v ${video_bitrate}k \
+            -pass 1 -an -f mp4 /dev/null
+          
+          # Pass 2: Encode
+          ffmpeg -i video_original.mp4 \
+            -c:v libx264 -preset medium -b:v ${video_bitrate}k \
+            -pass 2 -c:a aac -b:a ${audio_bitrate}k \
+            -y video-compress.yaml
+
+      - name: Check final size
+        run: |
+          ls -lh video-compress.yaml
+          size=$(stat -c%s video-compress.yaml)
+          limit=104857600 # 100 MB in bytes
+          if [ $size -gt $limit ]; then
+            echo "Error: Final video size ($size bytes) exceeds 100MB limit."
+            exit 1
+          fi
+          echo "Success: File is under 100MB."
+
+      - name: Commit and push video
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Remove original to save space
+          rm video_original.mp4
+          
+          git add video-compress.yaml
+          
+          if ! git diff --staged --quiet; then
+            git commit -m "Download and compress video (Two-Pass <100MB)"
+            git push
+          else
+            echo "No changes to commit."
+          fi   
