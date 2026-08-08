@@ -3,12 +3,11 @@ name: Download video GLS
 on:
   workflow_dispatch:
     inputs:
-      video_url:
-        description: 'URL to the Sibnet video PAGE (e.g., https://video.sibnet.ru/shell.php?videoid=12345)'
+      video_page_url:
+        description: 'Full URL to the Sibnet video page (e.g., https://video.sibnet.ru/video5982905-Title)'
         required: true
         type: string
-        # Do not put a direct .mp4 link here; put the page URL
-        default: 'https://video.sibnet.ru/shell.php?videoid=5982905' 
+        default: 'https://video.sibnet.ru/video5982905-Garouden_8_VF/'
       file_prefix:
         description: 'Prefix for the saved filename'
         required: true
@@ -19,9 +18,6 @@ on:
         required: false
         type: string
         default: 'Download video (LFS)'
-  push: 
-    branches:
-      -  main
 
 permissions:
   contents: write
@@ -44,45 +40,83 @@ jobs:
       - name: Extract Direct URL and Download
         id: download_step
         run: |
-          PAGE_URL="${{ inputs.video_url }}"
+          PAGE_URL="${{ inputs.video_page_url }}"
           PREFIX="${{ inputs.file_prefix }}"
           DATE_STR=$(date +%Y-%m-%d)
           FILENAME="${PREFIX}-${DATE_STR}.mp4"
           
-          echo "🌐 Fetching video page to extract direct link..."
+          # 1. Extract Video ID from URL (handles both shell.php?videoid=X and videoX-Title formats)
+          VIDEO_ID=$(echo "$PAGE_URL" | grep -oP 'video\K\d+' | head -n 1)
           
-          # 1. Fetch the page content with a browser User-Agent to avoid blocking
-          HTML_CONTENT=$(curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" "$PAGE_URL")
+          if [ -z "$VIDEO_ID" ]; then
+            # Fallback: try to extract from shell.php?videoid=
+            VIDEO_ID=$(echo "$PAGE_URL" | grep -oP 'videoid=\K\d+' | head -n 1)
+          fi
+
+          if [ -z "$VIDEO_ID" ]; then
+            echo "::error::Could not extract Video ID from URL: $PAGE_URL"
+            exit 1
+          fi
+
+          # Construct the reliable shell.php URL for extraction
+          SHELL_URL="https://video.sibnet.ru/shell.php?videoid=$VIDEO_ID"
+          echo "🌐 Fetching player data from: $SHELL_URL"
+
+          # 2. Fetch page with comprehensive headers to avoid 400/403 errors
+          # Using -b "" to send empty cookies (prevents cookie header issues)
+          HTML_CONTENT=$(curl -s --fail \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8" \
+            -H "Accept-Language: en-US,en;q=0.5" \
+            -H "Connection: keep-alive" \
+            -H "Upgrade-Insecure-Requests: 1" \
+            -H "Sec-Fetch-Dest: document" \
+            -H "Sec-Fetch-Mode: navigate" \
+            -H "Sec-Fetch-Site: none" \
+            -b "" \
+            "$SHELL_URL")
+
+          if [ $? -ne 0 ] || [ -z "$HTML_CONTENT" ]; then
+            echo "::error::Failed to fetch video page. Received empty response or HTTP error."
+            exit 1
+          fi
+
+          # 3. Extract Direct MP4 URL
+          # Pattern 1: Look for 'src' in video tag or player config
+          DIRECT_URL=$(echo "$HTML_CONTENT" | grep -oP 'src=["\x27]\Khttps?://video\.sibnet\.ru/v/[^"\x27]+\.mp4' | head -n 1)
           
-          # 2. Extract the direct MP4 URL using regex
-          # Looks for src="http://video.sibnet.ru/..." or similar patterns in the player embed code
-          DIRECT_URL=$(echo "$HTML_CONTENT" | grep -oP 'src=["\x27]\Khttp[^"\x27]+\.mp4' | head -n 1)
-          
+          # Pattern 2: Look for 'file' in JS config (common fallback)
           if [ -z "$DIRECT_URL" ]; then
-            # Fallback: Try to find 'file' parameter in JS if src tag fails
-            DIRECT_URL=$(echo "$HTML_CONTENT" | grep -oP 'file["\x27]\s*:\s*["\x27]\K[^"\x27]+' | head -n 1)
+            DIRECT_URL=$(echo "$HTML_CONTENT" | grep -oP 'file["\x27]\s*:\s*["\x27]\Khttps?://video\.sibnet\.ru/v/[^"\x27]+\.mp4' | head -n 1)
+          fi
+
+          # Pattern 3: Look for any sibnet.ru/v/... link
+          if [ -z "$DIRECT_URL" ]; then
+            DIRECT_URL=$(echo "$HTML_CONTENT" | grep -oP 'https?://video\.sibnet\.ru/v/[a-zA-Z0-9/]+\.mp4' | head -n 1)
           fi
 
           if [ -z "$DIRECT_URL" ]; then
-            echo "::error::Failed to extract direct video URL. The site structure may have changed or the video is private."
-            echo "Debug HTML snippet:"
-            echo "$HTML_CONTENT" | head -c 500
+            echo "::error::Failed to extract direct video URL. Site structure may have changed."
+            echo "--- Debug HTML Snippet ---"
+            echo "$HTML_CONTENT" | head -c 1000
             exit 1
           fi
 
           echo "✅ Direct URL found: $DIRECT_URL"
           echo "⬇️ Downloading video..."
 
-          # 3. Download with User-Agent and Referer to mimic a browser
-          if ! curl -L --fail --location --max-time 120 \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-            -e "$PAGE_URL" \
+          # 4. Download with Referer and User-Agent
+          if ! curl -L --fail --location --max-time 180 \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            -H "Referer: $SHELL_URL" \
+            -H "Origin: https://video.sibnet.ru" \
+            -b "" \
             -o "$FILENAME" "$DIRECT_URL"; then
-            echo "::error::Download failed. HTTP Error."
+            echo "::error::Download failed. HTTP Error or Connection Reset."
             exit 1
           fi
 
-          # 4. Validation
+          # 5. Validation
           echo "🔍 Validating file..."
           FILE_SIZE=$(stat -c%s "$FILENAME")
           FILE_TYPE=$(file -b --mime-type "$FILENAME")
@@ -90,21 +124,17 @@ jobs:
           echo "File size: $FILE_SIZE bytes"
           echo "MIME type: $FILE_TYPE"
           
-          # Check if file is too small (likely an error message)
           if [ "$FILE_SIZE" -lt 50000 ]; then
-            echo "::error::File too small ($FILE_SIZE bytes). Likely an HTTP error page or blocked request."
+            echo "::error::File too small ($FILE_SIZE bytes). Likely an HTTP error page."
             cat "$FILENAME"
             exit 1
           fi
           
-          # Check MIME type (allow video/mp4 or application/octet-stream if headers are weird but file is valid)
-          if [[ "$FILE_TYPE" != "video/mp4" && "$FILE_TYPE" != "application/octet-stream" ]]; then
-             # Double check with magic bytes if mime type is ambiguous
-             HEAD_BYTES=$(xxd -l 4 -p "$FILENAME")
-             if [ "$HEAD_BYTES" != "00000018" ] && [ "$HEAD_BYTES" != "00000020" ]; then # Basic MP4 magic number check
-                echo "::error::File is not a valid MP4 (detected: $FILE_TYPE). Download corrupted."
-                exit 1
-             fi
+          # Validate MP4 magic number (00 00 00 18 or 00 00 00 20)
+          HEAD_BYTES=$(xxd -l 4 -p "$FILENAME")
+          if [[ "$HEAD_BYTES" != "00000018" && "$HEAD_BYTES" != "00000020" && "$HEAD_BYTES" != "0000001c" ]]; then
+             echo "::error::File is not a valid MP4 (Magic bytes: $HEAD_BYTES). Download corrupted."
+             exit 1
           fi
           
           echo "filename=$FILENAME" >> $GITHUB_OUTPUT
@@ -118,7 +148,6 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # FIX: Use glob pattern for tracking, not specific filename
           git lfs track "*.mp4"
           git add .gitattributes
           git add "$FILENAME"
