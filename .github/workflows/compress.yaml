@@ -1,4 +1,4 @@
-name: Download and Compress Video compress
+name: Download and Compress Video
 
 on:
   workflow_dispatch:
@@ -9,6 +9,7 @@ permissions:
 jobs:
   process-video:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -47,17 +48,18 @@ jobs:
           ffmpeg -y -i video_original.mp4 \
             -c:v libx264 -preset medium -b:v ${video_bitrate}k \
             -pass 1 -an -f mp4 /dev/null
-          
+            
           # Pass 2: Encode
+          # FIXED: Changed output extension from .yaml to .mp4
           ffmpeg -i video_original.mp4 \
             -c:v libx264 -preset medium -b:v ${video_bitrate}k \
             -pass 2 -c:a aac -b:a ${audio_bitrate}k \
-            -y video-compress.yaml
+            -y video-compress.mp4
 
       - name: Check final size
         run: |
-          ls -lh video-compress.yaml
-          size=$(stat -c%s video-compress.yaml)
+          ls -lh video-compress.mp4
+          size=$(stat -c%s video-compress.mp4)
           limit=104857600 # 100 MB in bytes
           if [ $size -gt $limit ]; then
             echo "Error: Final video size ($size bytes) exceeds 100MB limit."
@@ -73,7 +75,8 @@ jobs:
           # Remove original to save space
           rm video_original.mp4
           
-          git add video-compress.yaml
+          # FIXED: Added the correct .mp4 file
+          git add video-compress.mp4
           
           if ! git diff --staged --quiet; then
             git commit -m "Download and compress video (Two-Pass <100MB)"
