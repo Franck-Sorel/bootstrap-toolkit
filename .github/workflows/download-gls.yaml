@@ -45,95 +45,95 @@ jobs:
           DATE_STR=$(date +%Y-%m-%d)
           FILENAME="${PREFIX}-${DATE_STR}.mp4"
           
-          # 1. Extract Video ID from URL (handles both shell.php?videoid=X and videoX-Title formats)
+          # 1. Extract Video ID
           VIDEO_ID=$(echo "$PAGE_URL" | grep -oP 'video\K\d+' | head -n 1)
-          
           if [ -z "$VIDEO_ID" ]; then
-            # Fallback: try to extract from shell.php?videoid=
             VIDEO_ID=$(echo "$PAGE_URL" | grep -oP 'videoid=\K\d+' | head -n 1)
           fi
 
           if [ -z "$VIDEO_ID" ]; then
-            echo "::error::Could not extract Video ID from URL: $PAGE_URL"
+            echo "::error::Could not extract Video ID from URL."
             exit 1
           fi
 
-          # Construct the reliable shell.php URL for extraction
+          # Use the shell.php URL which reliably contains the player config
           SHELL_URL="https://video.sibnet.ru/shell.php?videoid=$VIDEO_ID"
-          echo "🌐 Fetching player data from: $SHELL_URL"
+          echo "🌐 Fetching player config from: $SHELL_URL"
 
-          # 2. Fetch page with comprehensive headers to avoid 400/403 errors
-          # Using -b "" to send empty cookies (prevents cookie header issues)
-          HTML_CONTENT=$(curl -s --fail \
+          # 2. Fetch with strict headers to prevent 400/403
+          # -b "" ensures no cookies are sent which might corrupt the request
+          HTML_CONTENT=$(curl -s --fail --location \
             -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
             -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8" \
             -H "Accept-Language: en-US,en;q=0.5" \
+            -H "Accept-Encoding: gzip, deflate, br" \
             -H "Connection: keep-alive" \
             -H "Upgrade-Insecure-Requests: 1" \
             -H "Sec-Fetch-Dest: document" \
             -H "Sec-Fetch-Mode: navigate" \
             -H "Sec-Fetch-Site: none" \
+            -H "Cache-Control: max-age=0" \
             -b "" \
             "$SHELL_URL")
 
           if [ $? -ne 0 ] || [ -z "$HTML_CONTENT" ]; then
-            echo "::error::Failed to fetch video page. Received empty response or HTTP error."
+            echo "::error::Failed to fetch video page. Check if the video ID is correct."
             exit 1
           fi
 
           # 3. Extract Direct MP4 URL
-          # Pattern 1: Look for 'src' in video tag or player config
-          DIRECT_URL=$(echo "$HTML_CONTENT" | grep -oP 'src=["\x27]\Khttps?://video\.sibnet\.ru/v/[^"\x27]+\.mp4' | head -n 1)
+          # Strategy A: Look for 'file' in jwplayer setup (common legacy format)
+          DIRECT_URL=$(echo "$HTML_CONTENT" | grep -oP "file['\"]?\s*:\s*['\"]\Khttps?://video\.sibnet\.ru/v/[^'\"]+\.mp4" | head -n 1)
           
-          # Pattern 2: Look for 'file' in JS config (common fallback)
+          # Strategy B: Look for src in video tag or generic http link to /v/...
           if [ -z "$DIRECT_URL" ]; then
-            DIRECT_URL=$(echo "$HTML_CONTENT" | grep -oP 'file["\x27]\s*:\s*["\x27]\Khttps?://video\.sibnet\.ru/v/[^"\x27]+\.mp4' | head -n 1)
+            DIRECT_URL=$(echo "$HTML_CONTENT" | grep -oP "https?://video\.sibnet\.ru/v/[a-zA-Z0-9/]+\.mp4" | head -n 1)
           fi
 
-          # Pattern 3: Look for any sibnet.ru/v/... link
+          # Strategy C: Look for m3u8 and convert to mp4 (sometimes only HLS is listed)
           if [ -z "$DIRECT_URL" ]; then
-            DIRECT_URL=$(echo "$HTML_CONTENT" | grep -oP 'https?://video\.sibnet\.ru/v/[a-zA-Z0-9/]+\.mp4' | head -n 1)
+            M3U8_URL=$(echo "$HTML_CONTENT" | grep -oP "https?://video\.sibnet\.ru/v/[a-zA-Z0-9/]+\.m3u8" | head -n 1)
+            if [ -n "$M3U8_URL" ]; then
+              DIRECT_URL="${M3U8_URL%.m3u8}.mp4"
+            fi
           fi
 
           if [ -z "$DIRECT_URL" ]; then
-            echo "::error::Failed to extract direct video URL. Site structure may have changed."
-            echo "--- Debug HTML Snippet ---"
-            echo "$HTML_CONTENT" | head -c 1000
+            echo "::error::Failed to extract direct video URL."
+            echo "--- Debug Content (First 500 chars) ---"
+            echo "$HTML_CONTENT" | head -c 500
             exit 1
           fi
 
           echo "✅ Direct URL found: $DIRECT_URL"
           echo "⬇️ Downloading video..."
 
-          # 4. Download with Referer and User-Agent
+          # 4. Download with Referer
           if ! curl -L --fail --location --max-time 180 \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
             -H "Referer: $SHELL_URL" \
             -H "Origin: https://video.sibnet.ru" \
             -b "" \
             -o "$FILENAME" "$DIRECT_URL"; then
-            echo "::error::Download failed. HTTP Error or Connection Reset."
+            echo "::error::Download failed."
             exit 1
           fi
 
           # 5. Validation
           echo "🔍 Validating file..."
           FILE_SIZE=$(stat -c%s "$FILENAME")
-          FILE_TYPE=$(file -b --mime-type "$FILENAME")
-          
           echo "File size: $FILE_SIZE bytes"
-          echo "MIME type: $FILE_TYPE"
           
           if [ "$FILE_SIZE" -lt 50000 ]; then
-            echo "::error::File too small ($FILE_SIZE bytes). Likely an HTTP error page."
+            echo "::error::File too small. Likely an error page."
             cat "$FILENAME"
             exit 1
           fi
           
-          # Validate MP4 magic number (00 00 00 18 or 00 00 00 20)
+          # Check MP4 Magic Bytes
           HEAD_BYTES=$(xxd -l 4 -p "$FILENAME")
           if [[ "$HEAD_BYTES" != "00000018" && "$HEAD_BYTES" != "00000020" && "$HEAD_BYTES" != "0000001c" ]]; then
-             echo "::error::File is not a valid MP4 (Magic bytes: $HEAD_BYTES). Download corrupted."
+             echo "::error::Invalid MP4 magic bytes: $HEAD_BYTES"
              exit 1
           fi
           
@@ -143,7 +143,6 @@ jobs:
         if: success()
         run: |
           FILENAME="${{ steps.download_step.outputs.filename }}"
-          
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -152,12 +151,8 @@ jobs:
           git add .gitattributes
           git add "$FILENAME"
           
-          echo "📊 LFS Status:"
-          git lfs ls-files
-          git status
-          
           if ! git diff --staged --quiet; then
-            git commit -m "${{ inputs.commit_message }} - $FILENAME - $(date +%Y-%m-%d)"
+            git commit -m "${{ inputs.commit_message }} - $FILENAME"
             git push
           else
             echo "No changes to commit."
