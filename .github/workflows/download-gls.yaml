@@ -1,4 +1,4 @@
-name: Download video
+name: Download video GLS
 
 on:
   workflow_dispatch:
